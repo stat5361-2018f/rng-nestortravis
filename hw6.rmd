@@ -1,0 +1,152 @@
+---
+  title: Homework 6
+  author: Travis Nestor
+  output: pdf_document
+---
+
+5.2.1) Rejection Sampling
+
+Let $f$ and $g$ be two probability densities on $(0, \infty)$ such that
+
+$$f(x) \propto \sqrt{4 + x} x ^ {\theta - 1} e ^ {-x}$$
+
+$$g(x) \propto ( 2x ^{\theta - 1} + x ^ {\theta - \frac{1}{2}} ) e ^{-x}$$
+
+Find the value of normalizing constant, $C$, such that
+$$ C \int_0 ^ \infty ( 2x ^{\theta - 1} + x ^ {\theta - \frac{1}{2}} ) e ^{-x} dx = 1 $$.
+
+First we show $g$ is a mixture of gamma distirbutions, by separating $g$ we get:
+$$ 2\int_0 ^ \infty ( x ^{\theta - 1})(e^{-x})dx + \int_0 ^ \infty(x ^ {\theta - \frac{1}{2}} )(e^{-x})dx$$
+$$ = 2 \Gamma (\theta) + \Gamma (\theta + 1/2)$$
+Subsituting these terms into our equation
+$$\Rightarrow C [ 2 \Gamma (\theta) + \Gamma (\theta + 1/2) ] = 1$$
+$$\Rightarrow C = \frac{1}{2 \Gamma (\theta) + \Gamma (\theta + 1/2)}$$
+Therefore
+$$ g(x) = \frac{1}{2 \Gamma (\theta) + \Gamma (\theta + 1/2)} (2x^{\theta -1})(e^{-x}) + \frac{1}{2 \Gamma (\theta) + \Gamma (\theta + 1/2)}(x^{\theta - 1/2})(e^{-x})$$
+By Multiplying each term by $\frac{\Gamma (\theta)}{\Gamma (\theta)}$ and $\frac {\Gamma (\theta +1/2)}{\Gamma (\theta +1/2)}$ respectively, we get the mixture of distributions:
+
+$$ g(x) = \frac{\Gamma(\theta)}{2 \Gamma (\theta) + \Gamma (\theta + 1/2)} (2x^{\theta -1})(e^{-x}) \frac{1}{\Gamma(\theta)} +
+\frac{\Gamma(\theta + 1/2)}{2 \Gamma (\theta) + \Gamma (\theta + 1/2)}(x^{\theta - 1/2})(e^{-x})\frac {1} {\Gamma(\theta + 1/2)}$$
+
+Therefore the component distributions are $\Gamma(\theta, 1)$ and $\Gamma(\theta + 1/2,1)$
+And corresponding weights: $\frac{2\Gamma(\theta)}{2 \Gamma (\theta) + \Gamma (\theta + 1/2)}$ and $\frac{\Gamma(\theta + 1/2)}{2 \Gamma (\theta) + \Gamma (\theta + 1/2)}$
+
+To sample from this code, we need to sample from a uniform distribution, comparing whether $U$ is less than the weight of each Gamma distribution component
+
+```{R}
+gamma.sample <- function(n){
+    n <- 10000
+    U <- runif(n)     
+    x <- rep(NA,n)
+    theta <- 1                            #arbitrary theta value
+    C <- 1 / (2 * gamma(theta) + gamma(theta + 0.5))      # Normalizing Constant
+    weight.g1 <- (2 * gamma(theta)) * C
+    weight.g2 <- (gamma(theta + 0.5)) * C
+    hh <- seq(.001, 10, .001)
+    true.dens <- weight.g1*dgamma(hh,1,1) + weight.g2*dgamma(hh,1.5,1)
+    
+    for (i in 1:n){
+      if (U[i] < weight.g1) {
+        x[i] <- rgamma(1, theta, 1)
+      }
+      else {
+        x[i] <- rgamma(1, theta + 0.5, 1)
+      }
+    }
+    aa <- plot(density(x))
+    z <- plot(true.dens, type = "l")
+    lines(aa,z)
+}
+gamma.sample(10000)
+```
+
+Rejection Sampling Method
+
+```{R}
+n <- 10000
+theta <- 1
+rs.sample <- rep(NA, n)
+C <- 1 / (2 * gamma(theta) + gamma(theta + 0.5))
+weight.f1 <- C * (2 * gamma(theta))
+alpha <- sqrt(2) / (2*C)
+
+for (i in 1:n){
+  U <- runif(1)
+  if (U < weight.f1){
+    x <- rgamma(1, theta, 1)
+  }
+  else{
+    x <- rgamma(1, theta + 0.5, 1)
+  }
+  UU <- runif(1)
+  f.x <- sqrt(4 + x) * x^(theta - 1) *exp(-x)
+  g.x <- C * (2 *x ^ (theta - 1) + x^(theta - 0.5)) * exp(-x)
+  z <- f.x / (alpha * g.x)
+  if (U > z) {
+    i <- i + 1; next 
+  }
+  else rs.sample[i] <- x
+}
+plot(density(rs.sample))
+```
+5.2.2) Mixture Proposal
+
+Given probability density f:
+$$f(x) \propto \frac{x^{\theta - 1}}{1 + x^2} + \sqrt{2+x^2} (1 -x )^{\beta -1}$$
+Sample from f as a mixture of beta distributions
+Let $0<x<1$, since $$\frac{x^{\theta - 1}}{1 + x^2} \leq x^{\theta -1}$$
+and
+$$\sqrt{2+x^2} (1 -x)^{\beta -1} \leq (\sqrt{2}  +x )(1 -x)^{\beta -1}$$
+
+we can say $$ C f(x) \leq q(x) = x^{\theta -1} + (\sqrt{3}   )(1 -x)^{\beta -1}$$
+where $\sqrt3$ is derrived from the max of $\sqrt{2+x^2}$ given x's domain.
+
+Since beta distibutions are of the form, $p(y|a,b) = \frac {y^{a-1}(1-y)^{b-1}} {B(a,b)}$, we get distibutions $beta(\theta, 1)$ and $beta(1, \beta)$ with weights $w_1 = (1/\theta)*C$ and $w_2= C*(\sqrt3 / \beta)$
+
+```{R}
+beta.samp <- function(n, theta, beta0){
+      bsamp <- rep(NA, n)
+      w1 <- beta(theta, 1) / (beta(theta, 1) + sqrt(3)* beta(1, beta0))
+      for (i in 1:n){
+        U <- runif(1)
+        if (U < w1){bsamp[i] <- rbeta(1, theta, 1)}
+        else {bsamp[i] <- rbeta(1,1, beta0)}
+      }
+    return(list(samp = bsamp,w1= w1, w2 =1-w1))  
+      }
+
+n <- 10000
+theta <- 2
+beta0 <- 2
+bsamp1 <- rep(0, n)
+C <- 1 / (theta) + sqrt(3) / beta0
+for (i in 1:n){
+  U <- 10000
+  upper <- 1
+  lower <- 0.5
+  while (U > C){
+    U <- runif(1)
+    b <- beta.samp(1, theta, beta0)
+    x <- b$samp
+    bsamp1[i] <- x
+    upper <- (x^(theta - 1) / (1 + x^2) + sqrt(2+x^2)*(1-x)^(beta0-1))
+    lower <- b$w1*dbeta(x, theta, 1) + b$w2*dbeta(x,1,beta0)
+  }
+}
+
+gg <- function(x) {x ^(theta-1) / (1+x^2) + sqrt(2+x^2) * (1-x)^(beta0-1)}
+dens.beta <- integrate(gg, lower=0, upper=1)$value
+plot(density(bsamp1), xlim=c(0,1))
+```
+
+Sampleing Separately
+
+```
+beta.sep <- function(n, beta, theta){
+  b <- rep(NA, n)
+  r <- rep(NA, n)
+  U <- runif(n)
+  wt <- 1/theta + sqrt(3) / beta
+  while (U > wt)
+}
+```
